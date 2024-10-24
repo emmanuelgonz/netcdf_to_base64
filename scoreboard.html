@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cesium netCDF Visualization</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script src="https://unpkg.com/netcdfjs@3.0.0/lib/index.js"></script>
+  <style>
+    #cesiumContainer {
+      width: 100%;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <script>
+    const viewer = new Cesium.Viewer('cesiumContainer');
+
+    fetch('./efficiency_snow_cover.nc')
+      .then(response => response.arrayBuffer())
+      .then(data => {
+        const netcdf = new netcdfjs(data);
+        const snowCover = netcdf.variables.find(v => v.name === 'Day_CMG_Snow_Cover').data[0];
+        const geoTransform = netcdf.variables.find(v => v.name === 'spatial_ref').attributes.GeoTransform;
+        const crsWkt = netcdf.variables.find(v => v.name === 'spatial_ref').attributes.crs_wkt;
+
+        function createImageFromData(data, width, height) {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext('2d');
+          const imageData = context.createImageData(width, height);
+
+          for (let i = 0; i < data.length; i++) {
+            const value = data[i];
+            const color = value === -2147483647 ? [0, 0, 0, 0] : [value, value, value, 255];
+            imageData.data.set(color, i * 4);
+          }
+
+          context.putImageData(imageData, 0, 0);
+          return canvas.toDataURL();
+        }
+
+        const imageUrl = createImageFromData(snowCover, snowCover[0].length, snowCover.length);
+
+        viewer.imageryLayers.addImageryProvider(new Cesium.SingleTileImageryProvider({
+          url: imageUrl,
+          rectangle: Cesium.Rectangle.fromDegrees(-113.94166666666668, 49.74166666666666 - 0.16666666666666666 * snowCover.length, -113.94166666666668 + 0.16666666666666666 * snowCover[0].length, 49.74166666666666)
+        }));
+      });
+  </script>
+</body>
+</html>
